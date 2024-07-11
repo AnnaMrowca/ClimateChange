@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 import logging as logger
 from collections import Counter
 
@@ -119,12 +120,11 @@ class CheckData:
         df['Continent_in_Country'] = df['Country'].isin(self.continents)
         count = df['Continent_in_Country'].sum()
         error_percent = round((count / len(df) ) * 100, 2)
-        logger.warning(f'{count} entires have continent in country. It is {error_percent} % of the entire dataset ')
+        logger.warning(f'{count} entries have continent in country. It is {error_percent} % of the entire dataset ')
         return df
 
 
     def correct_data_in_columns(self, df: pd.DataFrame, corrections: dict, column: str) -> pd.DataFrame:
-
         """
             Generic function to correct data in specific column using correction dict
 
@@ -186,6 +186,21 @@ class Model:
         test = df[~mask]
         return train, test
 
+class Visual:
+
+    def create_visuals(self, time_series, temperature_series):
+        plt.figure(figsize=(10, 6))
+        plt.plot(time_series, temperature_series, marker='o', linestyle='-', color='b', label='Temperature')
+        plt.title('Temperature Over Time')
+        plt.xlabel('Time')
+        plt.ylabel('Temperature')
+        plt.grid(True)
+        plt.legend()
+
+        plt.show()
+
+
+
     #czy będzie padać (klasyfikacja)
     # przewidywanie temperatury Arima (regresja)
     #metoda:
@@ -197,9 +212,7 @@ class Model:
      #dane przed modelowaniem
      #na osi X czas, na osi Y temperatura
 
-    #test/ train - splitujemy
-    #test - 30%
-    #train - 70%
+
 
 
 
