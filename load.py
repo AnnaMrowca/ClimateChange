@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import logging as logger
 from collections import Counter
 
+from statsmodels.tsa.stattools import adfuller
+
 
 logger.basicConfig(level=logger.INFO)
 
@@ -145,7 +147,7 @@ class CheckData:
             if count > 0:
                 col_changes_count[original_value] += count
 
-        logger.warning(f'Columns changed: {dict(col_changes_count)}') #TODO
+        logger.warning(f'Columns changed: {dict(col_changes_count)}')
         df[column] = df[column].replace(corrections)
         return df
 
@@ -163,10 +165,19 @@ class CheckData:
         return df
 
 class Model:
-    def __init__(self, modeling_columns):
-        self.modeling_columns = modeling_columns
 
-    def get_modeling_columns(self, df:pd.DataFrame, modeling_columns: list) -> pd.DataFrame:
+    def get_modeling_columns(self, df: pd.DataFrame, modeling_columns) -> pd.DataFrame:
+        """
+                Extracts specified modeling columns from a df and logs the percentage of missing values
+
+                Parameters:
+                - df: DataFrame to extract the modeling columns from
+                - modeling_columns: list of columns to filter from the df
+
+                Returns:
+                - modeling_df: DataFrame containing the specified modeling columns
+        """
+
         modeling_df = df.loc[:,modeling_columns]
         nans = modeling_df[modeling_columns].isna().sum().sum()
         nans_percent = round(nans / len(modeling_df) * 100, 2)
@@ -176,41 +187,159 @@ class Model:
             logger.warning((f'HIGH number of non existent values in modeling column {modeling_columns}: {nans_percent}%'))
         return modeling_df
 
-    def drop_nans(self, df:pd.DataFrame, modeling_columns: list) ->pd.DataFrame:
-        df.dropna(subset= modeling_columns, inplace=True)
+    def drop_nans(self, df: pd.DataFrame, modeling_columns) -> pd.DataFrame:
+        """
+            Drops rows with NaN values in modeling columns
+
+            Parameters:
+            - df: DataFrame from which to drop rows with NaN values
+            - modeling_columns: list of column names to check for NaN values
+
+            Returns:
+            - df: DataFrame cleaned of NaN values in modeling columns
+        """
+        df = df.dropna(subset=modeling_columns)
         return df
 
-    def test_train_split(self, df:pd.DataFrame) -> pd.DataFrame:
+    def test_train_split(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+            Splits the DataFrame into training and testing sets using an 80-20 split
+
+            Parameters:
+            - df: DataFrame to be split into training and testing sets
+
+            Returns:
+            - train: DataFrame, 80% of the original df for training
+            - test: DataFrame, 20% of the original df for testing
+        """
         mask = np.random.rand(len(df)) < 0.8
         train = df[mask]
         test = df[~mask]
         return train, test
 
+    def select_country(self, df: pd.DataFrame, modeling_country) -> pd.DataFrame:
+        """
+                Selects rows where the 'Country' column matches the specified country.
+
+                Parameters:
+                - df: DataFrame to filter
+                - country: Country name to filter by
+
+                Returns:
+                - df: Filtered DataFrame containing only rows where 'Country' is the specified country
+        """
+        df = df.loc[df['Country'].isin(modeling_country)]
+        return df
+
+    def remove_3sigma_outliers(self, df: pd.DataFrame, three_sigma_col: list) -> pd.DataFrame:
+        """
+            Removes outliers from the specified columns using the 3-sigma rule.
+
+            Parameters:
+            - df: DataFrame to remove outliers from
+            - three_sigma_col: list of column to apply the 3-sigma rule
+
+            Returns:
+            - df_cleaned: DataFrame with outliers removed based on the 3-sigma rule
+        """
+
+        df_cleaned = df.copy()
+
+        for col in three_sigma_col:
+            mean = df_cleaned[col].mean()
+            sd = df_cleaned[col].std()
+
+            lower_bound = mean - (3 * sd)
+            upper_bound = mean + (3 * sd)
+
+            outliers_mask = (df_cleaned[col] < lower_bound) | (df_cleaned[col] > upper_bound)
+            df_outliers = df_cleaned[outliers_mask]
+            percent = round(len(df_outliers) / len(df_cleaned), 2) * 100
+
+            df_cleaned = df_cleaned[~outliers_mask]
+
+        print(f'Remaining DataFrame size: {len(df_cleaned)} and {percent} % of dataframe')
+
+        return df_cleaned
+
+    def testing_adf(self, df: pd.DataFrame, adf_column):
+        """
+            Performs ADF test on selected column
+
+            Parameters:
+            - df: DataFrame containing the data to be tested
+            - adf_column:  name of the column to perform the ADF test
+
+            Returns:
+            - adf_statistics
+            - p_value
+        """
+        adf_test = adfuller(df[adf_column])
+        adf_statistics = round(adf_test[0], 5)
+        p_value = round(adf_test[1], 5)
+
+        logger.info(f'adf_statistics: {adf_statistics }')
+        logger.info(f'p_value: {p_value}')
+
+        return adf_statistics, p_value
+
 class Visual:
 
-    def create_visuals(self, time_series, temperature_series):
-        plt.figure(figsize=(10, 6))
-        plt.plot(time_series, temperature_series, marker='o', linestyle='-', color='b', label='Temperature')
-        plt.title('Temperature Over Time')
-        plt.xlabel('Time')
-        plt.ylabel('Temperature')
-        plt.grid(True)
+    def create_visuals_scatterplot(self, df: pd.DataFrame, time_series: str, temperature_series: str, fig=None, ax=None) -> tuple:
+
+        """
+           Creates a scatter plot of temperature over time.
+
+           Parameters:
+           - df: DataFrame with data to plot.
+           - time_series: column name with date
+           - temperature_series: column name with values
+           - fig: optional, matplotlib figure object to plot on. If none, a new figure is created.
+           - ax: optional, matplotlib axes object to plot on. If none, new axes are created.
+
+           Returns:
+           - fig, ax: Tuple of matplotlib figure and axes objects with scatter plot
+           """
+        #TODO:
+        #assertion what if we do not have either time series or temperature series
+        if (fig is None) or (ax is None):
+            fig, ax = plt.subplots(figsize=(10, 6))
+
+        ax.plot(df[time_series], df[temperature_series], marker='o', linestyle='-', color='b', label='Temperature')
+        ax.set_title(f'Temperature Over Time for {df["Country"].unique()}')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Temperature')
+        ax.grid(True)
+
+        return fig, ax
+
+    def add_trending_line(self, df: pd.DataFrame, time_series: str, temperature_series: str, fig=None, ax=None) -> tuple:
+        """
+            Adds a linear trend line to a scatter plot of temperature over time.
+
+            Parameters:
+            - df: DataFrame with data to plot.
+            - time_series: column name with date
+            - temperature_series: column name with values
+            - fig: optional, matplotlib figure object to plot on. If none, a new figure is created.
+            - ax: optional, matplotlib axes object to plot on. If none, new axes are created.
+
+            Returns:
+            - fig, ax: tuple of matplotlib figure and axes objects with scatter plot with trend line
+        """
+
+        if (fig is None) or (ax is None):
+            fig, ax = plt.subplots(figsize=(10, 6))
+
+        time_series_visual = (df[time_series] - df[time_series].min()).dt.days
+
+        coefficient_p = np.polyfit(time_series_visual, df[temperature_series], 1)
+        slope = coefficient_p[0]
+        intercept = coefficient_p[1]
+        ax.plot(df[time_series], slope*time_series_visual+intercept)
+
         plt.legend()
-
-        plt.show()
-
-
-
-    #czy będzie padać (klasyfikacja)
-    # przewidywanie temperatury Arima (regresja)
-    #metoda:
-        #biorę tylko kolumny, które są potrzebne do modelowania
-        #robię kopię tych danych
-        #spradzić, ale procentowo jest NaNs w wybranych kolumnach
-    #klasa vizualizacja
-    #pyplot
-     #dane przed modelowaniem
-     #na osi X czas, na osi Y temperatura
+        return fig, ax
 
 
 

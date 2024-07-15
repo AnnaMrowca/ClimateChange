@@ -8,5 +8,3 @@ pd.set_option('display.max_columns', 100)
 input_path = 'C:\\Users\\Ania\\Desktop\\ClimateChange\\processed_dataset.csv'
 df = pd.read_csv(input_path)
 print(df)
-
-# letter_u_in_country =
