@@ -363,9 +363,13 @@ class Visual:
 
            Returns:
            - fig, ax: Tuple of matplotlib figure and axes objects with scatter plot
-           """
-        #TODO:
-        #assertion what if we do not have either time series or temperature series
+       """
+        if time_series is None:
+            raise ValueError('Obligatory parameter "time_series" is not given.')
+
+        if temperature_series is None:
+            raise ValueError('Obligatory parameter "temperature_series" is not given.')
+
         if (fig is None) or (ax is None):
             fig, ax = plt.subplots(figsize=(10, 6))
 
@@ -391,6 +395,11 @@ class Visual:
             Returns:
             - fig, ax: tuple of matplotlib figure and axes objects with scatter plot with trend line
         """
+        if time_series is None:
+            raise ValueError('Obligatory parameter "time_series" is not given.')
+
+        if temperature_series is None:
+            raise ValueError('Obligatory parameter "temperature_series" is not given.')
 
         if (fig is None) or (ax is None):
             fig, ax = plt.subplots(figsize=(10, 6))

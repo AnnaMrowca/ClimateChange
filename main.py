@@ -95,8 +95,7 @@ forecast_visual = visualizer.create_forecast_visual(train_data=train.loc[train['
                                                     temperature_series='AverageTemperatureByCountry',
                                                     time_series='dt')
 plt.show()
-# for i in dataset_merged['Country'].unique():
-#     print(i)
+
 
 
 
