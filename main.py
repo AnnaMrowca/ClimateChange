@@ -62,23 +62,39 @@ model_dataset = modeler.select_country(df=model_dataset,
 model_dataset = modeler.remove_3sigma_outliers(df=model_dataset,
                                                three_sigma_col=three_sigma_col)
 
-fig, ax = visualizer.create_visuals_scatterplot(model_dataset,
+fig, ax = visualizer.create_visuals_scatterplot(df=model_dataset.loc[model_dataset['dt'] >= pd.to_datetime('01-01-2009')],
                                                  time_series= 'dt',
                                                  temperature_series = 'AverageTemperatureByCountry'
                                                  )
 
-model_dataset_trend_line = visualizer.add_trending_line(model_dataset,
+model_dataset_trend_line = visualizer.add_trending_line(df=model_dataset.loc[model_dataset['dt'] >= pd.to_datetime('01-01-2009')],
                                                  time_series= 'dt',
                                                  temperature_series = 'AverageTemperatureByCountry',
                                                  fig=fig,
                                                  ax=ax)
 plt.show()
 
-test, train = modeler.test_train_split(df=model_dataset)
+train, test = modeler.test_train_split(df=model_dataset)
 
-adf_testing = modeler.testing_adf(df=test,
+adf_testing = modeler.testing_adf(df=train,
                                   adf_column=adf_column)
 
+model = modeler.get_auto_arima(train_data=train,
+                                  temperature_series='AverageTemperatureByCountry',
+                                  seasonal=True,
+                                  m=6)
+
+forecast = modeler.get_forecast(model=model,
+                                initial_date=test['dt'].min(),
+                                n_periods=len(test) + 12,)
+
+print(forecast)
+forecast_visual = visualizer.create_forecast_visual(train_data=train.loc[train['dt'] >= pd.to_datetime('01-01-1953')],
+                                                    test_data=test,
+                                                    forecast=forecast,
+                                                    temperature_series='AverageTemperatureByCountry',
+                                                    time_series='dt')
+plt.show()
 # for i in dataset_merged['Country'].unique():
 #     print(i)
 

@@ -2,9 +2,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import logging as logger
-from collections import Counter
 
+from collections import Counter
 from statsmodels.tsa.stattools import adfuller
+from sklearn.model_selection import train_test_split
+
+import pmdarima as pm
 
 
 logger.basicConfig(level=logger.INFO)
@@ -212,9 +215,11 @@ class Model:
             - train: DataFrame, 80% of the original df for training
             - test: DataFrame, 20% of the original df for testing
         """
-        mask = np.random.rand(len(df)) < 0.8
-        train = df[mask]
-        test = df[~mask]
+        df.reset_index(inplace=True)
+        split_index = round((df.index.max() * 0.8))
+        train = df.loc[df.index <= split_index]
+        test = df.loc[df.index > split_index]
+
         return train, test
 
     def select_country(self, df: pd.DataFrame, modeling_country) -> pd.DataFrame:
@@ -283,7 +288,66 @@ class Model:
 
         return adf_statistics, p_value
 
+    def get_auto_arima(self, train_data: pd.DataFrame, temperature_series: str, seasonal: bool, m=None):
+        """
+            Features ARIMA or SARIMA model to the training data.
+
+            Parameters:
+            - train_data: DataFrame with train set
+            - temperature_series: name of the column with the temperature
+            - seasonal: boolean indicating whether seasonal is True or False
+            - m: the number of periods in each seasonal cycle; required if seasonal is True
+
+            Returns:
+            - model: ARIMA or SARIMA model
+        """
+
+        model = pm.auto_arima(train_data[temperature_series],
+                              seasonal=seasonal,
+                              m=m,
+                              d=0,
+                              start_p=0, start_q=0,
+                              max_p=7, max_q=7,
+                              trace=True,
+                              error_action='ignore',
+                              suppress_warnings=True,
+                              stepwise=True)
+
+        print(model.summary())
+
+        return model
+
+    def get_forecast(self, model, initial_date: str, n_periods: int) -> pd.DataFrame:
+        """
+            Generates a forecast and confidence intervals from the ARIMA or SARIMA model.
+
+            Parameters:
+            - model: ARIMA or SARIMA model
+            - initial_date: the starting date (string) for the forecast
+            - n_periods: the number of periods (months) to forecast into the future
+
+            Returns:
+            - forecast_df: DataFrame with forecast, confidence intervals and date
+
+        """
+
+        forecast, confidence_intervals = model.predict(n_periods=n_periods, return_conf_int=True)
+        forecast_df = pd.DataFrame(columns=['Forecast', 'Lower_CI', 'Upper_CI'])
+        forecast_df['Forecast'] = forecast
+        forecast_df['Lower_CI'] = confidence_intervals[:, 0]
+        forecast_df['Upper_CI'] = confidence_intervals[:, 1]
+        forecast_df['dt'] = pd.date_range(start=initial_date, periods=n_periods, freq='MS')
+
+        return forecast_df
+
 class Visual:
+    def __init__(self, linestyle='-', marker='o', color='b', title_fontsize=14, label_fontsize=12, grid=True):
+        self.linestyle = linestyle
+        self.marker = marker
+        self.color = color
+        self.title_fontsize = title_fontsize
+        self.label_fontsize = label_fontsize
+        self.grid = grid
 
     def create_visuals_scatterplot(self, df: pd.DataFrame, time_series: str, temperature_series: str, fig=None, ax=None) -> tuple:
 
@@ -291,7 +355,7 @@ class Visual:
            Creates a scatter plot of temperature over time.
 
            Parameters:
-           - df: DataFrame with data to plot.
+           - df: DataFrame with data to plot
            - time_series: column name with date
            - temperature_series: column name with values
            - fig: optional, matplotlib figure object to plot on. If none, a new figure is created.
@@ -305,11 +369,11 @@ class Visual:
         if (fig is None) or (ax is None):
             fig, ax = plt.subplots(figsize=(10, 6))
 
-        ax.plot(df[time_series], df[temperature_series], marker='o', linestyle='-', color='b', label='Temperature')
-        ax.set_title(f'Temperature Over Time for {df["Country"].unique()}')
-        ax.set_xlabel('Time')
-        ax.set_ylabel('Temperature')
-        ax.grid(True)
+        ax.plot(df[time_series], df[temperature_series], marker=self.marker, linestyle=self.linestyle, color=self.color, label='Temperature')
+        ax.set_title(f'Temperature Over Time for {df["Country"].unique()}', fontsize=self.label_fontsize)
+        ax.set_xlabel('Time', fontsize=self.label_fontsize)
+        ax.set_ylabel('Temperature', fontsize=self.label_fontsize)
+        ax.grid(self.grid)
 
         return fig, ax
 
@@ -318,7 +382,7 @@ class Visual:
             Adds a linear trend line to a scatter plot of temperature over time.
 
             Parameters:
-            - df: DataFrame with data to plot.
+            - df: DataFrame with data to plot
             - time_series: column name with date
             - temperature_series: column name with values
             - fig: optional, matplotlib figure object to plot on. If none, a new figure is created.
@@ -336,16 +400,41 @@ class Visual:
         coefficient_p = np.polyfit(time_series_visual, df[temperature_series], 1)
         slope = coefficient_p[0]
         intercept = coefficient_p[1]
-        ax.plot(df[time_series], slope*time_series_visual+intercept)
+        ax.plot(df[time_series], slope*time_series_visual+intercept, linestyle=self.linestyle, color='r')
 
         plt.legend()
         return fig, ax
 
+    def create_forecast_visual(self, train_data: pd.DataFrame, test_data: pd.DataFrame, forecast: pd.DataFrame, time_series: str, temperature_series: str) -> tuple:
+        """
+            Creates plot for forecast, train and test data, including confidence intervals.
 
+            Parameters:
+            - train_data: DataFrame with training data
+            - test_data: DataFrame with test data
+            - forecast: DataFrame with forecast and  confidence intervals
+            - time_series: column name with date
+            - temperature_series: column name with temperature
 
+            Returns:
+            - fig, ax: tuple of matplotlib figure and axes objects with the forecast plot
+        """
 
+        fig, ax = plt.subplots(figsize=(10, 6))
 
+        ax.plot(train_data[time_series], train_data[temperature_series], label='Train', color='red')
+        ax.plot(test_data[time_series], test_data[temperature_series], label='Test', color='green')
+        ax.plot(forecast[time_series], forecast['Forecast'], label='Forecast', color=self.color)
+        ax.fill_between(forecast[time_series], forecast['Lower_CI'], forecast['Upper_CI'], color='grey', alpha=0.15,
+                        label='Confidence Interval')
 
+        ax.set_title('Temperature Forecast with Confidence Intervals', fontsize=self.label_fontsize)
+        ax.set_xlabel('Time', fontsize=self.label_fontsize)
+        ax.set_ylabel('Temperature', fontsize=self.label_fontsize)
+        ax.legend()
+        ax.grid(self.grid)
+
+        return fig, ax
 
 
 
