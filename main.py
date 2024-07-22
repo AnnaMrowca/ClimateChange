@@ -107,8 +107,7 @@ forecast = modeler.get_forecast(
     n_periods=len(test) + 12,
 )
 
-print(forecast)
-forecast_visual = visualizer.create_forecast_visual(
+arima_visual = visualizer.create_forecast_visual(
     train_data=train.loc[train["dt"] >= pd.to_datetime("01-01-1953")],
     test_data=test,
     forecast=forecast,
@@ -116,3 +115,23 @@ forecast_visual = visualizer.create_forecast_visual(
     time_series="dt",
 )
 plt.show()
+
+prophet_model = modeler.get_prophet_model(
+    train_data=train)
+
+test_forecast, future_forecast = modeler.get_prophet_forecast(
+    model=prophet_model,
+    test_data = test,
+    n_periods= len(test) + 12)
+
+prophet_visual= visualizer.create_forecast_visual(
+    train_data=train.loc[train["dt"] >= pd.to_datetime("01-01-1953")],
+    test_data=test,
+    forecast=future_forecast,
+    temperature_series="AverageTemperatureByCountry",
+    time_series="dt",
+)
+plt.show()
+
+
+
