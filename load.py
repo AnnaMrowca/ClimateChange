@@ -372,56 +372,72 @@ class Model:
         return forecast_df
 
     def get_prophet_model(self, train_data: pd.DataFrame):
-
         """
-       Features Prophet model to the training data
+        Features Prophet model to the training data
 
-       Parameters:
-       - train_data: DataFrame with train set
+        Parameters:
+        - train_data: DataFrame with train set
 
-       Returns:
-       - model: A trained Prophet model
-           """
+        Returns:
+        - model: A trained Prophet model
+        """
 
         train_data = train_data.copy()
-        train_data['ds'] = train_data['dt']
-        train_data['y'] = train_data['AverageTemperatureByCountry']
+        train_data["ds"] = train_data["dt"]
+        train_data["y"] = train_data["AverageTemperatureByCountry"]
         model = Prophet(seasonality_mode="multiplicative", yearly_seasonality=True)
         model = model.fit(train_data)
 
         return model
 
-    def get_prophet_forecast(self, model, test_data: pd.DataFrame, n_periods: str, ) -> pd.DataFrame:
+    def get_prophet_forecast(
+        self,
+        model,
+        test_data: pd.DataFrame,
+        n_periods: str,
+    ) -> pd.DataFrame:
         """
-          Generates a forecast and confidence intervals from the Prophet model
+        Generates a forecast and confidence intervals from the Prophet model
 
-          Parameters:
-          - model: the Prophet model
-          - train_data: DataFrame with train set
-          - n_periods: the number of periods (months) to forecast into the future
+        Parameters:
+        - model: the Prophet model
+        - train_data: DataFrame with train set
+        - n_periods: the number of periods (months) to forecast into the future
 
-          Returns:
-          - test_forecast: DataFrame with forecast and confidence intervals for the test data
-          - future_forecast: DataFrame with forecast and confidence intervals for the future periods
-          """
+        Returns:
+        - test_forecast: DataFrame with forecast and confidence intervals for the test data
+        - future_forecast: DataFrame with forecast and confidence intervals for the future periods
+        """
 
         test_data = test_data.copy()
-        test_data['ds'] = test_data['dt']
-        test_data['y'] = test_data['AverageTemperatureByCountry']
+        test_data["ds"] = test_data["dt"]
+        test_data["y"] = test_data["AverageTemperatureByCountry"]
 
         test_forecast = model.predict(test_data)
-        future = model.make_future_dataframe(periods=n_periods, freq='MS', include_history=False)
+        future = model.make_future_dataframe(
+            periods=n_periods, freq="MS", include_history=False
+        )
         future_forecast = model.predict(future)
 
-        test_forecast.rename(columns={'ds': 'dt',
-                              'yhat': 'Forecast',
-                              'yhat_lower': 'Lower_CI',
-                              'yhat_upper': 'Upper_CI'}, inplace=True)
+        test_forecast.rename(
+            columns={
+                "ds": "dt",
+                "yhat": "Forecast",
+                "yhat_lower": "Lower_CI",
+                "yhat_upper": "Upper_CI",
+            },
+            inplace=True,
+        )
 
-        future_forecast.rename(columns={'ds': 'dt',
-                              'yhat': 'Forecast',
-                              'yhat_lower': 'Lower_CI',
-                              'yhat_upper': 'Upper_CI'}, inplace=True)
+        future_forecast.rename(
+            columns={
+                "ds": "dt",
+                "yhat": "Forecast",
+                "yhat_lower": "Lower_CI",
+                "yhat_upper": "Upper_CI",
+            },
+            inplace=True,
+        )
 
         return test_forecast, future_forecast
 
