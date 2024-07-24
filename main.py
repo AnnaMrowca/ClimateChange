@@ -94,15 +94,15 @@ train, test = modeler.test_train_split(df=model_dataset)
 
 adf_testing = modeler.testing_adf(df=train, adf_column=adf_column)
 
-model = modeler.get_auto_arima(
+arima_model = modeler.get_auto_arima(
     train_data=train,
     temperature_series="AverageTemperatureByCountry",
     seasonal=True,
     m=6,
 )
 
-forecast = modeler.get_forecast(
-    model=model,
+arima_forecast = modeler.get_arima_forecast(
+    model=arima_model,
     initial_date=test["dt"].min(),
     n_periods=len(test) + 12,
 )
@@ -110,7 +110,7 @@ forecast = modeler.get_forecast(
 arima_visual = visualizer.create_forecast_visual(
     train_data=train.loc[train["dt"] >= pd.to_datetime("01-01-1953")],
     test_data=test,
-    forecast=forecast,
+    forecast=arima_forecast,
     temperature_series="AverageTemperatureByCountry",
     time_series="dt",
 )
@@ -118,15 +118,24 @@ plt.show()
 
 prophet_model = modeler.get_prophet_model(train_data=train)
 
-test_forecast, future_forecast = modeler.get_prophet_forecast(
+prophet_test_forecast, prophet_future_forecast = modeler.get_prophet_forecast(
     model=prophet_model, test_data=test, n_periods=len(test) + 12
+)
+
+forecast_accuracy = modeler.forecast_accuracy(
+    forecast=prophet_test_forecast["Forecast"].values,
+    actual=test["AverageTemperatureByCountry"].values,
 )
 
 prophet_visual = visualizer.create_forecast_visual(
     train_data=train.loc[train["dt"] >= pd.to_datetime("01-01-1953")],
     test_data=test,
-    forecast=future_forecast,
+    forecast=prophet_future_forecast,
     temperature_series="AverageTemperatureByCountry",
     time_series="dt",
 )
 plt.show()
+
+print("###############")
+print(forecast_accuracy)
+print("###############")

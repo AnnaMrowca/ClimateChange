@@ -344,7 +344,9 @@ class Model:
 
         return model
 
-    def get_forecast(self, model, initial_date: str, n_periods: int) -> pd.DataFrame:
+    def get_arima_forecast(
+        self, model, initial_date: str, n_periods: int
+    ) -> pd.DataFrame:
         """
         Generates a forecast and confidence intervals from the ARIMA or SARIMA model.
 
@@ -440,6 +442,25 @@ class Model:
         )
 
         return test_forecast, future_forecast
+
+    def forecast_accuracy(self, forecast: np.ndarray, actual: np.ndarray):
+        """
+        Calculate accuracy metrics for forecast
+
+        Parameters:
+        - forecast: numpy array with forecasted values
+        - actual: numpy array with actual values
+
+        Returns:
+        - Dictionary with accuracy metrics
+        """
+
+        mape = np.mean(np.abs(forecast - actual) / np.abs(actual))
+        me = np.mean(forecast - actual)
+        mae = np.mean(np.abs(forecast - actual))
+        mpe = np.mean((forecast - actual) / actual)
+
+        return {"mape": mape, "me": me, "mae": mae, "mpe": mpe}
 
 
 class Visual:
