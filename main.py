@@ -6,6 +6,7 @@ import os
 
 # SETTINGS
 data_path = "C:\\Users\Ania\\Desktop\\ClimateChange\\"
+outputs_path = "C:\\Users\Ania\\Desktop\\ClimateChange\\outputs\\"
 date_list = ["dt"]
 merge_columns = ["Country", "dt"]
 pd.set_option("display.max_columns", 100)
@@ -32,7 +33,7 @@ countries = {
 modeling_columns = ["dt", "Country", "AverageTemperatureByCountry"]
 modeling_country = [
     "Poland"
-]  # dt, country = Poland, avegage temperature, Arima, Sarimax, Prophet (sezonowość)
+]
 three_sigma_col = ["AverageTemperatureByCountry"]
 adf_column = ["AverageTemperatureByCountry"]
 
@@ -88,11 +89,14 @@ model_dataset_trend_line = visualizer.add_trending_line(
     fig=fig,
     ax=ax,
 )
-plt.show()
 
-train, test = modeler.test_train_split(df=model_dataset)
+train, test = modeler.test_train_split(
+    df=model_dataset,
+    outputs_path=outputs_path)
 
-adf_testing = modeler.testing_adf(df=train, adf_column=adf_column)
+adf_testing = modeler.testing_adf(
+    df=train,
+    adf_column=adf_column)
 
 arima_model = modeler.get_auto_arima(
     train_data=train,
@@ -105,6 +109,7 @@ arima_forecast = modeler.get_arima_forecast(
     model=arima_model,
     initial_date=test["dt"].min(),
     n_periods=len(test) + 12,
+    outputs_path=outputs_path
 )
 
 arima_visual = visualizer.create_forecast_visual(
@@ -113,19 +118,24 @@ arima_visual = visualizer.create_forecast_visual(
     forecast=arima_forecast,
     temperature_series="AverageTemperatureByCountry",
     time_series="dt",
+    model_type = 'ARIMA',
+    outputs_path=outputs_path
 )
-plt.show()
 
 prophet_model = modeler.get_prophet_model(train_data=train)
 
 prophet_test_forecast, prophet_future_forecast = modeler.get_prophet_forecast(
-    model=prophet_model, test_data=test, n_periods=len(test) + 12
+    model=prophet_model,
+    test_data=test,
+    n_periods=len(test) + 12,
+    outputs_path=outputs_path
 )
 
 forecast_accuracy = modeler.forecast_accuracy(
     forecast=prophet_test_forecast["Forecast"].values,
     actual=test["AverageTemperatureByCountry"].values,
 )
+prophet_diagnostics = modeler.get_prophet_diagnostics(model=prophet_model)
 
 prophet_visual = visualizer.create_forecast_visual(
     train_data=train.loc[train["dt"] >= pd.to_datetime("01-01-1953")],
@@ -133,9 +143,49 @@ prophet_visual = visualizer.create_forecast_visual(
     forecast=prophet_future_forecast,
     temperature_series="AverageTemperatureByCountry",
     time_series="dt",
+    model_type = 'PROPHET',
+    outputs_path=outputs_path
 )
-plt.show()
 
-print("###############")
-print(forecast_accuracy)
-print("###############")
+actuals_visual = visualizer.get_actual_visual_scatter_plot(
+    actual=test,
+    temperature_series="AverageTemperatureByCountry",
+    time_series="dt",
+    outputs_path=outputs_path
+)
+
+arima_forecast_visual = visualizer.get_forecast_visual_scatter_plot(
+    forecast=arima_forecast,
+    temperature_series="Forecast",
+    time_series="dt",
+    model_type = 'ARIMA',
+    outputs_path=outputs_path
+)
+
+prophet_forecast_visual = visualizer.get_forecast_visual_scatter_plot(
+    forecast=prophet_future_forecast,
+    temperature_series="Forecast",
+    time_series="dt",
+    model_type = 'PROPHET',
+    outputs_path=outputs_path
+)
+
+prophet_forecast_vs_actual = visualizer.get_forecast_vs_actual_scatter_plot(
+    forecast=prophet_test_forecast["Forecast"].values,
+    actual=test["AverageTemperatureByCountry"].values,
+    model_type = 'PROPHET',
+    outputs_path=outputs_path
+)
+
+arima_forecast_vs_actual = visualizer.get_forecast_vs_actual_scatter_plot(
+    forecast=arima_forecast["Forecast"].values[:len(test)],
+    actual=test["AverageTemperatureByCountry"].values,
+    model_type = 'ARIMA',
+    outputs_path=outputs_path
+)
+
+
+
+
+
+
