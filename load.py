@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,7 +9,7 @@ from statsmodels.tsa.stattools import adfuller
 
 import pmdarima as pm
 from prophet import Prophet
-
+from prophet.diagnostics import cross_validation, performance_metrics
 
 logger.basicConfig(level=logger.INFO)
 
@@ -16,10 +17,10 @@ logger.basicConfig(level=logger.INFO)
 class LoadData:
     def load_data(self, file_path: str) -> pd.DataFrame:
         """
-        Loads data from a CSV file located at the file_path into a DataFrame.
+        Loads data from a CSV file located at the file_path into a DataFrame
 
         Parameters:
-        - file_path: ath to the CSV file.
+        - file_path: ath to the CSV file
 
         Returns:
         - df: DataFrame with data from the CSV file, or an empty DataFrame if the file is not csv
@@ -35,14 +36,14 @@ class LoadData:
 
     def parse_dates(self, df: pd.DataFrame, date_list: list = []) -> pd.DataFrame:
         """
-        Parses date columns in a DataFrame to datetime format based on the provided date_list.
+        Parses date columns in a DataFrame to datetime format based on the provided date_list
 
         Parameters:
-        - df: DataFrame - DataFrame containing columns to parse.
-        - date_list: list of column names in df to parse as dates. Default is an empty list.
+        - df: DataFrame - DataFrame containing columns to parse
+        - date_list: list of column names in df to parse as dates. Default is an empty list
 
         Returns:
-        - df: DataFrame with specified columns converted to datetime format.
+        - df: DataFrame with specified columns converted to datetime format
         """
 
         for column in date_list:
@@ -54,7 +55,7 @@ class LoadData:
         self, df_1: pd.DataFrame, df_2: pd.DataFrame, merge_columns: list, suffix: str
     ) -> pd.DataFrame:
         """
-        Merges two DataFrames and returns the merged DataFrame.
+        Merges two DataFrames and returns the merged DataFrame
 
         Parameters:
         - df_1: DataFrame - first DataFrame
@@ -95,13 +96,13 @@ class CheckData:
 
     def check_nans(self, df: pd.DataFrame) -> bool:
         """
-        Checks for NaN values in the dataset columns.
+        Checks for NaN values in the dataset columns
 
         Parameters:
-        - dataset: DataFrame with data to be checked for NaN values.
+        - dataset: DataFrame with data to be checked for NaN values
 
         Returns:
-        - bool: False if there are NaN values in columns, True otherwise.
+        - bool: False if there are NaN values in columns, True otherwise
         """
 
         columns_with_nans = []
@@ -119,7 +120,7 @@ class CheckData:
     def if_continents_in_countries_column(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Adds a 'Continent_in_Country' column with True/False values based on whether the 'Country'
-        column contains a continent (True), and logs percentage of True entries in the dataset.
+        column contains a continent (True), and logs percentage of True entries in the dataset
 
         Parameters:
         - df: the DataFrame with the 'Country' column to check.
@@ -178,7 +179,9 @@ class CheckData:
 
 class Model:
 
-    def get_modeling_columns(self, df: pd.DataFrame, modeling_columns) -> pd.DataFrame:
+    def get_modeling_columns(
+        self, df: pd.DataFrame, modeling_columns: list
+    ) -> pd.DataFrame:
         """
         Extracts specified modeling columns from a df and logs the percentage of missing values
 
@@ -205,7 +208,7 @@ class Model:
             )
         return modeling_df
 
-    def drop_nans(self, df: pd.DataFrame, modeling_columns) -> pd.DataFrame:
+    def drop_nans(self, df: pd.DataFrame, modeling_columns: list) -> pd.DataFrame:
         """
         Drops rows with NaN values in modeling columns
 
@@ -219,7 +222,7 @@ class Model:
         df = df.dropna(subset=modeling_columns)
         return df
 
-    def test_train_split(self, df: pd.DataFrame) -> pd.DataFrame:
+    def test_train_split(self, df: pd.DataFrame, outputs_path: str) -> pd.DataFrame:
         """
         Splits the DataFrame into training and testing sets using an 80-20 split
 
@@ -235,11 +238,14 @@ class Model:
         train = df.loc[df.index <= split_index]
         test = df.loc[df.index > split_index]
 
+        train.to_csv(os.path.join(outputs_path, "train.csv"), sep=",", index=False)
+        test.to_csv(os.path.join(outputs_path, "test.csv"), sep=",", index=False)
+
         return train, test
 
     def select_country(self, df: pd.DataFrame, modeling_country) -> pd.DataFrame:
         """
-        Selects rows where the 'Country' column matches the specified country.
+        Selects rows where the 'Country' column matches the specified country
 
         Parameters:
         - df: DataFrame to filter
@@ -255,7 +261,7 @@ class Model:
         self, df: pd.DataFrame, three_sigma_col: list
     ) -> pd.DataFrame:
         """
-        Removes outliers from the specified columns using the 3-sigma rule.
+        Removes outliers from the specified columns using the 3-sigma rule
 
         Parameters:
         - df: DataFrame to remove outliers from
@@ -313,7 +319,7 @@ class Model:
         self, train_data: pd.DataFrame, temperature_series: str, seasonal: bool, m=None
     ):
         """
-        Features ARIMA or SARIMA model to the training data.
+        Features ARIMA or SARIMA model to the training data
 
         Parameters:
         - train_data: DataFrame with train set
@@ -344,9 +350,11 @@ class Model:
 
         return model
 
-    def get_forecast(self, model, initial_date: str, n_periods: int) -> pd.DataFrame:
+    def get_arima_forecast(
+        self, model, initial_date: str, n_periods: int, outputs_path: str
+    ) -> pd.DataFrame:
         """
-        Generates a forecast and confidence intervals from the ARIMA or SARIMA model.
+        Generates a forecast and confidence intervals from the ARIMA or SARIMA model
 
         Parameters:
         - model: ARIMA or SARIMA model
@@ -369,6 +377,10 @@ class Model:
             start=initial_date, periods=n_periods, freq="MS"
         )
 
+        forecast_df.to_csv(
+            os.path.join(outputs_path, "ARIMA_forecast.csv"), sep=",", index=False
+        )
+
         return forecast_df
 
     def get_prophet_model(self, train_data: pd.DataFrame):
@@ -385,16 +397,19 @@ class Model:
         train_data = train_data.copy()
         train_data["ds"] = train_data["dt"]
         train_data["y"] = train_data["AverageTemperatureByCountry"]
-        model = Prophet(seasonality_mode="multiplicative", yearly_seasonality=True)
+        model = Prophet(
+            seasonality_mode="multiplicative",
+            yearly_seasonality=True,
+            weekly_seasonality=False,
+            daily_seasonality=False,
+            changepoint_prior_scale=0.05,
+        )
         model = model.fit(train_data)
 
         return model
 
     def get_prophet_forecast(
-        self,
-        model,
-        test_data: pd.DataFrame,
-        n_periods: str,
+        self, model, test_data: pd.DataFrame, n_periods: str, outputs_path: str
     ) -> pd.DataFrame:
         """
         Generates a forecast and confidence intervals from the Prophet model
@@ -417,6 +432,7 @@ class Model:
         future = model.make_future_dataframe(
             periods=n_periods, freq="MS", include_history=False
         )
+
         future_forecast = model.predict(future)
 
         test_forecast.rename(
@@ -438,8 +454,38 @@ class Model:
             },
             inplace=True,
         )
+        future_forecast.to_csv(
+            os.path.join(outputs_path, "PROPHET_forecast.csv"), sep=",", index=False
+        )
 
         return test_forecast, future_forecast
+
+    def forecast_accuracy(self, forecast: np.ndarray, actual: np.ndarray):
+        """
+        Calculate accuracy metrics for forecast
+
+        Parameters:
+        - forecast: numpy array with forecasted values
+        - actual: numpy array with actual values
+
+        Returns:
+        - Dictionary with accuracy metrics
+        """
+
+        mape = np.mean(np.abs(forecast - actual) / np.abs(actual))
+        me = np.mean(forecast - actual)
+        mae = np.mean(np.abs(forecast - actual))
+        mpe = np.mean((forecast - actual) / actual)
+
+        return {"mape": mape, "me": me, "mae": mae, "mpe": mpe}
+
+    def get_prophet_diagnostics(self, model):
+        df_cross_val = cross_validation(
+            model, initial="730 days", period="180 days", horizon="365 days"
+        )
+        df_perf = performance_metrics(df_cross_val)
+
+        return df_perf
 
 
 class Visual:
@@ -468,14 +514,14 @@ class Visual:
         ax=None,
     ) -> tuple:
         """
-        Creates a scatter plot of temperature over time.
+        Creates a scatter plot of temperature over time
 
         Parameters:
         - df: DataFrame with data to plot
         - time_series: column name with date
         - temperature_series: column name with values
-        - fig: optional, matplotlib figure object to plot on. If none, a new figure is created.
-        - ax: optional, matplotlib axes object to plot on. If none, new axes are created.
+        - fig: optional, matplotlib figure object to plot on. If none, a new figure is created
+        - ax: optional, matplotlib axes object to plot on. If none, new axes are created
 
         Returns:
         - fig, ax: Tuple of matplotlib figure and axes objects with scatter plot
@@ -516,14 +562,14 @@ class Visual:
         ax=None,
     ) -> tuple:
         """
-        Adds a linear trend line to a scatter plot of temperature over time.
+        Adds a linear trend line to a scatter plot of temperature over time
 
         Parameters:
         - df: DataFrame with data to plot
         - time_series: column name with date
         - temperature_series: column name with values
-        - fig: optional, matplotlib figure object to plot on. If none, a new figure is created.
-        - ax: optional, matplotlib axes object to plot on. If none, new axes are created.
+        - fig: optional, matplotlib figure object to plot on. If none, a new figure is created
+        - ax: optional, matplotlib axes object to plot on. If none, new axes are created
 
         Returns:
         - fig, ax: tuple of matplotlib figure and axes objects with scatter plot with trend line
@@ -559,9 +605,11 @@ class Visual:
         forecast: pd.DataFrame,
         time_series: str,
         temperature_series: str,
+        model_type: str,
+        outputs_path: str,
     ) -> tuple:
         """
-        Creates plot for forecast, train and test data, including confidence intervals.
+        Creates plot for forecast, train and test data, including confidence intervals
 
         Parameters:
         - train_data: DataFrame with training data
@@ -569,6 +617,8 @@ class Visual:
         - forecast: DataFrame with forecast and  confidence intervals
         - time_series: column name with date
         - temperature_series: column name with temperature
+        - model_type: string with name of model (ARIMA, PROPHET, etc.)
+        - outputs_path: string with path to outputs folder
 
         Returns:
         - fig, ax: tuple of matplotlib figure and axes objects with the forecast plot
@@ -604,12 +654,164 @@ class Visual:
         )
 
         ax.set_title(
-            "Temperature Forecast with Confidence Intervals",
+            f"Temperature Forecast with Confidence Intervals for {model_type}",
             fontsize=self.label_fontsize,
         )
         ax.set_xlabel("Time", fontsize=self.label_fontsize)
         ax.set_ylabel("Temperature", fontsize=self.label_fontsize)
         ax.legend()
         ax.grid(self.grid)
+
+        plt.savefig(
+            os.path.join(outputs_path, f"{model_type}_plot.png"), dpi=100, format="png"
+        )
+
+        return fig, ax
+
+    def get_forecast_visual_scatter_plot(
+        self,
+        forecast: pd.DataFrame,
+        time_series: str,
+        temperature_series: str,
+        model_type: str,
+        outputs_path: str,
+        fig=None,
+        ax=None,
+    ) -> tuple:
+        """
+        Creates a scatter plot of forecasted temperature data over time
+
+        Parameters:
+        - forecast: DataFrame with the forecasted data
+        - time_series: column name with date
+        - temperature_series: column name with temperature
+        - model_type: string with name of model (ARIMA, PROPHET, etc.)
+        - outputs_path: string with path to outputs folder
+        - fig: matplotlib figure object, if None, a new figure is created
+        - ax: matplotlib axes object, if None, a new axes is created
+
+        Returns:
+        - fig, ax: tuple of matplotlib figure and axes objects with the forecast plot
+        """
+
+        if (fig is None) or (ax is None):
+            fig, ax = plt.subplots(figsize=(10, 6))
+
+        ax.plot(
+            forecast[time_series],
+            forecast[temperature_series],
+            marker=self.marker,
+            linestyle="None",
+            color=self.color,
+        )
+
+        ax.set_title(
+            f"Forecast over Time for {model_type}",
+            fontsize=self.label_fontsize,
+        )
+
+        ax.set_xlabel("dt")
+        ax.set_ylabel("Forecast")
+
+        plt.savefig(
+            os.path.join(outputs_path, f"{model_type}_forecast.png"),
+            dpi=100,
+            format="png",
+        )
+
+        return fig, ax
+
+    def get_actual_visual_scatter_plot(
+        self,
+        actual: pd.DataFrame,
+        time_series: str,
+        temperature_series: str,
+        outputs_path: str,
+        fig=None,
+        ax=None,
+    ) -> tuple:
+        """
+        Creates a scatter plot of actual temperature data over time
+
+        Parameters:
+        - actual: DataFrame containing the actual data
+        - time_series: The column name with date
+        - temperature_series: The column name with temperature
+        - outputs_path: string with path to outputs folder
+        - fig: matplotlib figure object, if None, a new figure is created
+        - ax: matplotlib axes object, if None, a new axes is created
+
+        Returns:
+        - fig, ax: Tuple of matplotlib figure and axes objects with the actual plot
+        """
+
+        if (fig is None) or (ax is None):
+            fig, ax = plt.subplots(figsize=(10, 6))
+
+        ax.plot(
+            actual[time_series],
+            actual[temperature_series],
+            marker=self.marker,
+            linestyle="None",
+            color=self.color,
+        )
+
+        ax.set_title(
+            f"Actuals over Time",
+            fontsize=self.label_fontsize,
+        )
+
+        ax.set_xlabel("dt")
+        ax.set_ylabel("Forecast")
+
+        plt.savefig(os.path.join(outputs_path, f"actuals.png"), dpi=100, format="png")
+
+        return fig, ax
+
+    def get_forecast_vs_actual_scatter_plot(
+        self,
+        actual: np.ndarray,
+        forecast: np.ndarray,
+        model_type: str,
+        outputs_path: str,
+        fig=None,
+        ax=None,
+    ) -> tuple:
+        """
+        Creates a scatter plot comparing forecasted vs. actual data
+
+        Parameters:
+        - actual: numpy array containing the actual values
+        - forecast: numpy array containing the forecasted values
+        - model_type: string with the name of the model (e.g., ARIMA, PROPHET)
+        - outputs_path: string with path to outputs folder
+        - fig: matplotlib figure object, if None, a new figure is created
+        - ax: matplotlib axes object, if None, a new axes is created
+
+        Returns:
+        - fig, ax: Tuple of matplotlib figure and axes objects with the scatter plot
+        """
+
+        if (fig is None) or (ax is None):
+            fig, ax = plt.subplots(figsize=(10, 6))
+
+        ax.plot(
+            actual,
+            forecast,
+            marker=self.marker,
+            linestyle="None",
+            color=self.color,
+            label=f"Forecast vs Actual for {model_type}",
+        )
+
+        ax.set_xlabel("actual")
+        ax.set_ylabel("forecast")
+        ax.legend()
+
+        plt.savefig(
+            os.path.join(outputs_path, f"{model_type}_forecast_vs_actual_plot.png"),
+            dpi=100,
+            format="png",
+        )
 
         return fig, ax
